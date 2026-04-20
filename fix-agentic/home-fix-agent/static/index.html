@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🔧 Home Fix Agent</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+  .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; margin: 20px 0; font-size: 1.8em; }
+  .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+
+  /* Upload area */
+  .upload-area { background: #fff; border: 2px dashed #ccc; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; margin-bottom: 20px; }
+  .upload-area:hover, .upload-area.dragover { border-color: #4a90d9; background: #f0f7ff; }
+  .upload-area img { max-width: 300px; max-height: 200px; border-radius: 8px; margin-top: 10px; }
+  .upload-area p { color: #888; margin: 10px 0; }
+  #file-input { display: none; }
+
+  /* Form */
+  .desc-input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; margin-bottom: 15px; }
+  .btn { display: inline-block; padding: 12px 24px; background: #4a90d9; color: #fff; border: none; border-radius: 8px; font-size: 1em; cursor: pointer; transition: background 0.2s; }
+  .btn:hover { background: #357abd; }
+  .btn:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-order { background: #27ae60; }
+  .btn-order:hover { background: #1e8449; }
+
+  /* Results */
+  .section { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .section h2 { font-size: 1.2em; margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+  .badge-green { background: #d4edda; color: #155724; }
+  .badge-yellow { background: #fff3cd; color: #856404; }
+  .badge-blue { background: #d1ecf1; color: #0c5460; }
+
+  /* Spec table */
+  .spec-table { width: 100%; border-collapse: collapse; }
+  .spec-table td { padding: 6px 12px; border-bottom: 1px solid #eee; }
+  .spec-table td:first-child { font-weight: 600; width: 40%; color: #555; }
+  .conf-bar { display: inline-block; height: 8px; border-radius: 4px; background: #4a90d9; }
+
+  /* Product cards */
+  .product-card { border: 1px solid #eee; border-radius: 8px; padding: 15px; margin-bottom: 12px; display: flex; gap: 15px; align-items: flex-start; transition: box-shadow 0.2s; }
+  .product-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .product-rank { font-size: 1.5em; font-weight: 700; color: #4a90d9; min-width: 30px; }
+  .product-info { flex: 1; }
+  .product-title { font-weight: 600; margin-bottom: 4px; }
+  .product-meta { color: #666; font-size: 0.9em; }
+  .product-reason { color: #27ae60; font-size: 0.85em; margin-top: 4px; }
+  .product-price { font-size: 1.2em; font-weight: 700; color: #333; min-width: 80px; text-align: right; }
+
+  /* Order confirmation */
+  .order-box { background: #d4edda; border-radius: 8px; padding: 20px; text-align: center; }
+  .order-box h3 { color: #155724; }
+
+  /* Loading */
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #ccc; border-top-color: #4a90d9; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading { text-align: center; padding: 30px; color: #666; }
+
+  .hidden { display: none; }
+  .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔧 Home Fix Agent</h1>
+  <p class="subtitle">Upload a photo of something broken — we'll find the replacement.</p>
+
+  <!-- Upload -->
+  <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+    <p>📷 Click or drag a photo here</p>
+    <p style="font-size:0.85em">Supports JPG, PNG, HEIC (max 20 MB)</p>
+    <img id="preview" class="hidden" alt="Preview">
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/heic">
+  </div>
+  <input class="desc-input" id="description" type="text" placeholder="Optional: describe the issue (e.g., 'kitchen ceiling light burned out')">
+  <button class="btn" id="analyze-btn" disabled onclick="analyze()">🔍 Analyze & Find Products</button>
+
+  <!-- Loading -->
+  <div id="loading" class="loading hidden">
+    <div class="spinner"></div>
+    <p>Analyzing your photo and searching for products...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error" class="error hidden"></div>
+
+  <!-- Analysis -->
+  <div id="analysis-section" class="section hidden">
+    <h2>📋 Issue Identified</h2>
+    <div id="analysis-content"></div>
+  </div>
+
+  <!-- Specs -->
+  <div id="spec-section" class="section hidden">
+    <h2>🔧 Product Specifications</h2>
+    <div id="spec-content"></div>
+  </div>
+
+  <!-- Products -->
+  <div id="products-section" class="section hidden">
+    <h2>🛒 Recommended Products</h2>
+    <div id="products-content"></div>
+  </div>
+
+  <!-- Order -->
+  <div id="order-section" class="section hidden">
+    <div id="order-content"></div>
+  </div>
+
+  <!-- History -->
+  <div class="section" style="margin-top:40px">
+    <h2>📜 Past Sessions</h2>
+    <div id="history-content"><p style="color:#888">Loading...</p></div>
+  </div>
+</div>
+
+<script>
+let currentResult = null;
+
+// File upload handling
+const fileInput = document.getElementById('file-input');
+const uploadArea = document.getElementById('upload-area');
+const preview = document.getElementById('preview');
+const analyzeBtn = document.getElementById('analyze-btn');
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  preview.src = URL.createObjectURL(file);
+  preview.classList.remove('hidden');
+  analyzeBtn.disabled = false;
+});
+
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) { fileInput.files = e.dataTransfer.files; fileInput.dispatchEvent(new Event('change')); }
+});
+
+async function analyze() {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  // Reset UI
+  ['analysis-section','spec-section','products-section','order-section','error'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('loading').classList.remove('hidden');
+  analyzeBtn.disabled = true;
+
+  const form = new FormData();
+  form.append('photo', file);
+  form.append('description', document.getElementById('description').value);
+
+  try {
+    const resp = await fetch('/analyze', { method: 'POST', body: form });
+    const data = await resp.json();
+    currentResult = data;
+    document.getElementById('loading').classList.add('hidden');
+
+    if (data.error) {
+      document.getElementById('error').textContent = data.error;
+      document.getElementById('error').classList.remove('hidden');
+      analyzeBtn.disabled = false;
+      return;
+    }
+
+    renderAnalysis(data.analysis);
+    renderSpec(data.spec);
+    renderProducts(data.products, data.session.session_id);
+  } catch (err) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('error').textContent = 'Request failed: ' + err.message;
+    document.getElementById('error').classList.remove('hidden');
+  }
+  analyzeBtn.disabled = false;
+}
+
+function renderAnalysis(a) {
+  if (!a) return;
+  const confPct = Math.round(a.confidence * 100);
+  const badgeClass = confPct >= 80 ? 'badge-green' : confPct >= 50 ? 'badge-yellow' : 'badge-blue';
+  let html = `<p><strong>${a.item_category}</strong> — ${a.problem_type} <span class="badge ${badgeClass}">${confPct}% confidence</span></p>`;
+  html += `<p style="margin-top:8px;color:#555">${a.description}</p>`;
+  if (a.visible_text && a.visible_text.length) {
+    html += `<p style="margin-top:6px"><strong>Visible text:</strong> ${a.visible_text.join(', ')}</p>`;
+  }
+  if (a.visible_brand) html += `<p><strong>Brand:</strong> ${a.visible_brand}</p>`;
+  document.getElementById('analysis-content').innerHTML = html;
+  document.getElementById('analysis-section').classList.remove('hidden');
+}
+
+function renderSpec(s) {
+  if (!s || !s.attributes) return;
+  let html = `<p style="margin-bottom:10px"><strong>Search:</strong> ${s.search_query}</p>`;
+  html += '<table class="spec-table">';
+  for (const [key, val] of Object.entries(s.attributes)) {
+    const conf = s.confidence_per_field[key] || 0;
+    const pct = Math.round(conf * 100);
+    const width = Math.max(pct, 5);
+    html += `<tr><td>${key.replace(/_/g, ' ')}</td><td>${val}</td><td><span class="conf-bar" style="width:${width}px"></span> ${pct}%</td></tr>`;
+  }
+  html += '</table>';
+  if (s.clarification_questions && s.clarification_questions.length) {
+    html += '<p style="margin-top:10px;color:#856404">❓ ' + s.clarification_questions.join(' | ') + '</p>';
+  }
+  document.getElementById('spec-content').innerHTML = html;
+  document.getElementById('spec-section').classList.remove('hidden');
+}
+
+function renderProducts(products, sessionId) {
+  if (!products || !products.length) return;
+  let html = '';
+  products.forEach((p, i) => {
+    const price = '$' + (p.price_cents / 100).toFixed(2);
+    const stars = p.rating ? '⭐' + p.rating : '';
+    html += `<div class="product-card">
+      <div class="product-rank">#${i + 1}</div>
+      <div class="product-info">
+        <div class="product-title">${p.title}</div>
+        <div class="product-meta">${stars} (${p.review_count} reviews) · ${p.availability} · Score: ${p.match_score.toFixed(2)}</div>
+        <div class="product-reason">✅ ${p.recommendation_reason}</div>
+        ${p.url ? `<a href="${p.url}" target="_blank" style="font-size:0.85em">View product →</a>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div class="product-price">${price}</div>
+        <button class="btn btn-order" style="margin-top:8px;padding:8px 16px;font-size:0.9em" onclick="placeOrder('${sessionId}', ${i})">Buy</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('products-content').innerHTML = html;
+  document.getElementById('products-section').classList.remove('hidden');
+}
+
+async function placeOrder(sessionId, index) {
+  if (!confirm('Place this order?')) return;
+  const form = new FormData();
+  form.append('session_id', sessionId);
+  form.append('product_index', index);
+  try {
+    const resp = await fetch('/order', { method: 'POST', body: form });
+    const order = await resp.json();
+    if (order.error) { alert(order.error); return; }
+    const price = '$' + (order.total_price_cents / 100).toFixed(2);
+    document.getElementById('order-content').innerHTML = `
+      <div class="order-box">
+        <h3>✅ Order Placed!</h3>
+        <p style="margin-top:8px"><strong>${order.product_title}</strong></p>
+        <p>Total: ${price} · Order ID: ${order.retailer_order_id}</p>
+      </div>`;
+    document.getElementById('order-section').classList.remove('hidden');
+    loadHistory();
+  } catch (err) { alert('Order failed: ' + err.message); }
+}
+
+async function loadHistory() {
+  try {
+    const resp = await fetch('/history');
+    const sessions = await resp.json();
+    if (!sessions.length) {
+      document.getElementById('history-content').innerHTML = '<p style="color:#888">No past sessions.</p>';
+      return;
+    }
+    let html = '<table style="width:100%;font-size:0.9em"><tr style="text-align:left;color:#888"><th>Session</th><th>Date</th><th>Category</th><th>Status</th></tr>';
+    sessions.forEach(s => {
+      const date = s.created_at ? new Date(s.created_at).toLocaleString() : '';
+      html += `<tr><td><code>${s.session_id}</code></td><td>${date}</td><td>${s.category || '-'}</td><td>${s.status}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('history-content').innerHTML = html;
+  } catch (err) {
+    document.getElementById('history-content').innerHTML = '<p style="color:#888">Could not load history.</p>';
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
